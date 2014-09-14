@@ -99,7 +99,7 @@ func NewChannelManager() *ChannelManager {
 func (this *ChannelManager) Count() int {
 	c := 0
 	for i := 0; i < Conf.ChannelBucket; i++ {
-		c += len(this.buckets.channels)
+		c += len(this.buckets[i].channels)
 	}
 	return c
 }
