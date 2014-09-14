@@ -14,7 +14,6 @@ var (
 )
 
 func init() {
-	var confFile string
 	flag.StringVar(&confFile, "c", "./node.conf", "set node config file path")
 }
 
@@ -31,7 +30,6 @@ type Config struct {
 }
 
 func InitConfig() error {
-	flag.Parse()
 	log.Printf("conf %s\n", confFile)
 	Conf = &Config{
 		// base
