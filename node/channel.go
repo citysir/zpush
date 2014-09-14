@@ -45,6 +45,8 @@ func (c *Connection) HandleWrite(key string) {
 				log.Debug("user_key: \"%s\" HandleWrite goroutine stop", key)
 				return
 			}
+			msg = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), string(msg)))
+			n, err = c.Conn.Write(msg)
 		}
 	}()
 }
