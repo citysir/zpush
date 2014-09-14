@@ -1,7 +1,6 @@
-yum install git hg -y
+sh setenv.sh
 
-export GOROOT=/usr/local/go
-export GOPATH=/data/apps/go
+yum install git hg -y
 
 mkdir -p /data/apps/go/src/code.google.com/p
 cd /data/apps/go/src/code.google.com/p
