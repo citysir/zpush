@@ -13,7 +13,7 @@ import (
 var (
 	ErrChannelNotExist = errors.New("Channel not exist")
 	ErrConnProto       = errors.New("Unknown connection protocol")
-	// ChannelHome        *ChannelHome
+	// ChannelManager        *ChannelManager
 	NodeRing *hash.HashRing
 )
 
@@ -66,7 +66,7 @@ type ChannelBucket struct {
 }
 
 // ChannelBuckets.
-type ChannelHome struct {
+type ChannelManager struct {
 	buckets []*ChannelBucket
 }
 
@@ -80,23 +80,23 @@ func (c *ChannelBucket) Unlock() {
 	c.mutex.Unlock()
 }
 
-func NewChannelHome() *ChannelHome {
-	channelHome := new(ChannelHome)
-	channelHome.buckets = []*ChannelBucket{}
+func NewChannelManager() *ChannelManager {
+	channelManager := new(ChannelManager)
+	channelManager.buckets = []*ChannelBucket{}
 	// split hashmap to many bucket
-	log.Debug("create %d ChannelHome", Conf.ChannelBucket)
+	log.Debug("create %d ChannelManager", Conf.ChannelBucket)
 	for i := 0; i < Conf.ChannelBucket; i++ {
 		bucket := &ChannelBucket{
-			Channels: map[string]Channel{},
+			channels: map[string]Channel{},
 			mutex:    &sync.Mutex{},
 		}
-		channelHome.buckets = append(channelHome.buckets, bucket)
+		channelManager.buckets = append(channelManager.buckets, bucket)
 	}
-	return l
+	return channelManager
 }
 
 // Count get the bucket total channel count.
-func (this *ChannelHome) Count() int {
+func (this *ChannelManager) Count() int {
 	c := 0
 	for i := 0; i < Conf.ChannelBucket; i++ {
 		c += len(this.buckets.channels)
@@ -105,7 +105,7 @@ func (this *ChannelHome) Count() int {
 }
 
 // bucket return a channelBucket use murmurhash3.
-func (this *ChannelHome) bucket(key string) *ChannelBucket {
+func (this *ChannelManager) bucket(key string) *ChannelBucket {
 	h := hash.NewMurmur3C()
 	h.Write([]byte(key))
 	idx := uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
@@ -114,14 +114,14 @@ func (this *ChannelHome) bucket(key string) *ChannelBucket {
 }
 
 // bucketIdx return a channelBucket index.
-func (this *ChannelHome) BucketIdx(key *string) uint {
+func (this *ChannelManager) BucketIdx(key *string) uint {
 	h := hash.NewMurmur3C()
 	h.Write([]byte(*key))
 	return uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
 }
 
 // New create a user channel.
-// func (this *ChannelHome) New(key string) (Channel, error) {
+// func (this *ChannelManager) New(key string) (Channel, error) {
 // 	// get a channel bucket
 // 	b := this.bucket(key)
 // 	b.Lock()
@@ -136,8 +136,8 @@ func (this *ChannelHome) BucketIdx(key *string) uint {
 // 	}
 // }
 
-// Get a user channel from ChannelHome.
-// func (this *ChannelHome) Get(key string, newOne bool) (Channel, error) {
+// Get a user channel from ChannelManager.
+// func (this *ChannelManager) Get(key string, newOne bool) (Channel, error) {
 // 	// get a channel bucket
 // 	b := this.bucket(key)
 // 	b.Lock()
@@ -159,7 +159,7 @@ func (this *ChannelHome) BucketIdx(key *string) uint {
 // }
 
 // // Delete a user channel from ChannleList.
-// func (l *ChannelHome) Delete(key string) (Channel, error) {
+// func (l *ChannelManager) Delete(key string) (Channel, error) {
 // 	// get a channel bucket
 // 	b := l.bucket(key)
 // 	b.Lock()
@@ -177,7 +177,7 @@ func (this *ChannelHome) BucketIdx(key *string) uint {
 // }
 
 // // Close close all channel.
-// func (l *ChannelHome) Close() {
+// func (l *ChannelManager) Close() {
 // 	log.Info("channel close")
 // 	chs := make([]Channel, 0, l.Count())
 // 	for _, c := range l.Channels {
@@ -196,7 +196,7 @@ func (this *ChannelHome) BucketIdx(key *string) uint {
 // }
 
 // Migrate migrate portion of connections which don`t belong to this Comet
-// func (l *ChannelHome) Migrate() {
+// func (l *ChannelManager) Migrate() {
 // 	// init ketama
 // 	ring := ketama.NewRing(Conf.KetamaBase)
 // 	for node, weight := range nodeWeightMap {
