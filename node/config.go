@@ -32,7 +32,7 @@ type Config struct {
 
 func InitConfig() error {
 	flag.Parse()
-	log.Println("conf", confFile)
+	log.Printf("conf %s\n", onfFile)
 	Conf = &Config{
 		// base
 		PidFile:    "/tmp/zpush-node.pid",
