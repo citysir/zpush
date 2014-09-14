@@ -4,9 +4,7 @@ import (
 	log "code.google.com/p/log4go"
 	"errors"
 	"fmt"
-	"github.com/Terry-Mao/gopush-cluster/hash"
-	"github.com/Terry-Mao/gopush-cluster/hlist"
-	"github.com/Terry-Mao/gopush-cluster/ketama"
+	"github.com/citysir/golib/hash"
 	"net"
 	"sync"
 )
@@ -14,7 +12,7 @@ import (
 var (
 	ErrChannelNotExist = errors.New("Channel not exist")
 	ErrConnProto       = errors.New("Unknown connection protocol")
-	UserChannel        *ChannelList
+	UserChannel        *ChannelHome
 	CometRing          *ketama.HashRing
 )
 
@@ -28,8 +26,8 @@ type Channel interface {
 
 // Connection
 type Connection struct {
-	Conn     net.Conn
-	Messages chan []byte
+	Conn net.Conn
+	Msgs chan []byte
 }
 
 // HandleWrite start a goroutine get msg from chan, then send to the conn.
@@ -41,29 +39,10 @@ func (c *Connection) HandleWrite(key string) {
 		)
 		log.Debug("user_key: \"%s\" HandleWrite goroutine start", key)
 		for {
-			msg, ok := <-c.Buf
+			msg, ok := <-c.Msgs
 			if !ok {
 				log.Debug("user_key: \"%s\" HandleWrite goroutine stop", key)
 				return
-			}
-			if c.Proto == WebsocketProto {
-				// raw
-				n, err = c.Conn.Write(msg)
-			} else if c.Proto == TCPProto {
-				// redis protocol
-				msg = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), string(msg)))
-				n, err = c.Conn.Write(msg)
-			} else {
-				log.Error("unknown connection protocol: %d", c.Proto)
-				panic(ErrConnProto)
-			}
-			// update stat
-			if err != nil {
-				log.Error("user_key: \"%s\" conn.Write() error(%v)", key, err)
-				MsgStat.IncrFailed(1)
-			} else {
-				log.Debug("user_key: \"%s\" write \r\n========%s(%d)========", key, string(msg), n)
-				MsgStat.IncrSucceed(1)
 			}
 		}
 	}()
@@ -103,26 +82,26 @@ func NewChannelHome() *ChannelHome {
 	// split hashmap to many bucket
 	log.Debug("create %d ChannelHome", Conf.ChannelBucket)
 	for i := 0; i < Conf.ChannelBucket; i++ {
-		c := &ChannelBucket{
-			Data:  map[string]Channel{},
-			mutex: &sync.Mutex{},
+		bucket := &ChannelBucket{
+			Channels: map[string]Channel{},
+			mutex:    &sync.Mutex{},
 		}
-		l.Channels = append(l.Channels, c)
+		channelHome = append(channelHome, bucket)
 	}
 	return l
 }
 
 // Count get the bucket total channel count.
-func (l *ChannelList) Count() int {
+func (this *ChannelHome) Count() int {
 	c := 0
 	for i := 0; i < Conf.ChannelBucket; i++ {
-		c += len(l.Channels[i].Data)
+		c += len(this.Channels)
 	}
 	return c
 }
 
 // bucket return a channelBucket use murmurhash3.
-func (l *ChannelList) bucket(key string) *ChannelBucket {
+func (this *ChannelHome) bucket(key string) *ChannelBucket {
 	h := hash.NewMurmur3C()
 	h.Write([]byte(key))
 	idx := uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
@@ -131,44 +110,38 @@ func (l *ChannelList) bucket(key string) *ChannelBucket {
 }
 
 // bucketIdx return a channelBucket index.
-func (l *ChannelList) BucketIdx(key *string) uint {
+func (this *ChannelHome) BucketIdx(key *string) uint {
 	h := hash.NewMurmur3C()
 	h.Write([]byte(*key))
 	return uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
 }
 
-// New create a user channle.
-func (l *ChannelList) New(key string) (Channel, error) {
+// New create a user channel.
+func (this *ChannelHome) New(key string) (Channel, error) {
 	// get a channel bucket
-	b := l.bucket(key)
+	b := this.bucket(key)
 	b.Lock()
 	if c, ok := b.Data[key]; ok {
 		b.Unlock()
-		ChStat.IncrAccess()
-		log.Info("user_key:\"%s\" refresh channel bucket expire time", key)
 		return c, nil
 	} else {
 		c = NewSeqChannel()
 		b.Data[key] = c
 		b.Unlock()
-		ChStat.IncrCreate()
-		log.Info("user_key:\"%s\" create a new channel", key)
 		return c, nil
 	}
 }
 
-// Get a user channel from ChannleList.
-func (l *ChannelList) Get(key string, newOne bool) (Channel, error) {
+// Get a user channel from ChannelHome.
+func (this *ChannelHome) Get(key string, newOne bool) (Channel, error) {
 	// get a channel bucket
-	b := l.bucket(key)
+	b := this.bucket(key)
 	b.Lock()
 	if c, ok := b.Data[key]; !ok {
 		if !Conf.Auth && newOne {
 			c = NewSeqChannel()
 			b.Data[key] = c
 			b.Unlock()
-			ChStat.IncrCreate()
-			log.Info("user_key:\"%s\" create a new channel", key)
 			return c, nil
 		} else {
 			b.Unlock()
@@ -177,14 +150,12 @@ func (l *ChannelList) Get(key string, newOne bool) (Channel, error) {
 		}
 	} else {
 		b.Unlock()
-		ChStat.IncrAccess()
-		log.Info("user_key:\"%s\" refresh channel bucket expire time", key)
 		return c, nil
 	}
 }
 
 // Delete a user channel from ChannleList.
-func (l *ChannelList) Delete(key string) (Channel, error) {
+func (l *ChannelHome) Delete(key string) (Channel, error) {
 	// get a channel bucket
 	b := l.bucket(key)
 	b.Lock()
@@ -202,7 +173,7 @@ func (l *ChannelList) Delete(key string) (Channel, error) {
 }
 
 // Close close all channel.
-func (l *ChannelList) Close() {
+func (l *ChannelHome) Close() {
 	log.Info("channel close")
 	chs := make([]Channel, 0, l.Count())
 	for _, c := range l.Channels {
@@ -221,7 +192,7 @@ func (l *ChannelList) Close() {
 }
 
 // Migrate migrate portion of connections which don`t belong to this Comet
-func (l *ChannelList) Migrate() {
+func (l *ChannelHome) Migrate() {
 	// init ketama
 	ring := ketama.NewRing(Conf.KetamaBase)
 	for node, weight := range nodeWeightMap {
