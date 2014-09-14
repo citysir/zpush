@@ -3,7 +3,7 @@ package main
 import (
 	log "code.google.com/p/log4go"
 	"errors"
-	// "fmt"
+	"fmt"
 	"github.com/citysir/golib/hash"
 	"github.com/citysir/zpush/proto"
 	"net"
