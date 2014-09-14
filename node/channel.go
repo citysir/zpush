@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/citysir/golib/hash"
+	"github.com/citysir/zpush/proto"
 	"net"
 	"sync"
 )
@@ -18,9 +19,9 @@ var (
 
 // The subscriber interface.
 type Channel interface {
-	PushMsg(key string, m *myrpc.Message, expire uint) error
-	AddConn(key string, conn *Connection) (*hlist.Element, error)
-	RemoveConn(key string, e *hlist.Element) error
+	PushMsg(key string, m *proto.Message, expire uint) error
+	AddConn(key string, conn *Connection) (*HilstNode, error)
+	RemoveConn(key string, e *HilstNode) error
 	Close() error
 }
 
