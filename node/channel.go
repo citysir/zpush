@@ -12,8 +12,8 @@ import (
 var (
 	ErrChannelNotExist = errors.New("Channel not exist")
 	ErrConnProto       = errors.New("Unknown connection protocol")
-	UserChannel        *ChannelHome
-	CometRing          *ketama.HashRing
+	ChannelHome        *ChannelHome
+	NodeRing           *hash.HashRing
 )
 
 // The subscriber interface.
