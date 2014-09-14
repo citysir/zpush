@@ -82,7 +82,7 @@ func (c *ChannelBucket) Unlock() {
 
 func NewChannelHome() *ChannelHome {
 	channelHome := new(ChannelHome)
-	channelHome.buckets = make([]*ChannelBucket)
+	channelHome.buckets = []*ChannelBucket{}
 	// split hashmap to many bucket
 	log.Debug("create %d ChannelHome", Conf.ChannelBucket)
 	for i := 0; i < Conf.ChannelBucket; i++ {
