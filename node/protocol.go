@@ -16,10 +16,9 @@ const (
 	MaxCmdNum = 5
 
 	CmdHeartBeat = "B"
-	CmdAuth      = "A"
 	CmdSubscribe = "S"
 
-	HeartbeatReply    = []byte("+h\r\n") // hearbeat
+	HeartbeatReply    = []byte("+B\r\n") // hearbeat
 	AuthFailedReply   = []byte("-a\r\n") // auth failed reply
 	ChannelErrorReply = []byte("-c\r\n") // channel not found reply
 	ParamErrorReply   = []byte("-p\r\n") // param error reply

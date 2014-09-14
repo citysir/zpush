@@ -27,8 +27,9 @@ type Channel interface {
 
 // Connection
 type Connection struct {
-	Conn net.Conn
-	Msgs chan []byte
+	Conn    net.Conn
+	Version string
+	Msgs    chan []byte
 }
 
 // HandleWrite start a goroutine get msg from chan, then send to the conn.

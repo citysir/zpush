@@ -29,7 +29,6 @@ import (
 )
 
 const (
-	Heartbeat                 = "h"
 	minHearbeatSec            = 30
 	delayHeartbeatSec         = 5
 	firstPacketTimedoutSecond = time.Second * 5
@@ -187,9 +186,9 @@ func subscribeTcpHandle(conn net.Conn, args []string) {
 		log.Warn("<%s> key param error", addr)
 		return
 	}
-	log.Debug("match node:%s hash node:%s", Conf.ZookeeperNode, CometRing.Hash(key))
+	log.Debug("match node:%s hash node:%s", Conf.ZookeeperNode, NodeRing.Hash(key))
 	if Conf.ZookeeperNode != NodeRing.Hash(key) {
-		conn.Write(NodeReply)
+		conn.Write(NodeErrorReply)
 		log.Warn("<%s> key node(%s) unmatch", addr, CometRing.Hash(key))
 		return
 	}
@@ -229,13 +228,13 @@ func subscribeTcpHandle(conn net.Conn, args []string) {
 		return
 	}
 	// add a conn to the channel
-	connElem, err := c.AddConn(key, &Connection{Conn: conn, Proto: TCPProto, Version: version})
+	connElem, err := c.AddConn(key, &Connection{Conn: conn, Version: version})
 	if err != nil {
 		log.Error("<%s> user_key:\"%s\" add conn error(%v)", addr, key, err)
 		return
 	}
 	// blocking wait client heartbeat
-	reply := []byte{0}
+	cmd := []byte{' '}
 	// reply := make([]byte, HeartbeatLen)
 	begin := time.Now().UnixNano()
 	end := begin + Second
@@ -248,7 +247,7 @@ func subscribeTcpHandle(conn net.Conn, args []string) {
 			}
 			begin = end
 		}
-		if _, err = conn.Read(reply); err != nil {
+		if _, err = conn.Read(cmd); err != nil {
 			if err != io.EOF {
 				log.Warn("<%s> user_key:\"%s\" conn.Read() failed, read heartbeat timedout error(%v)", addr, key, err)
 			} else {
@@ -257,14 +256,14 @@ func subscribeTcpHandle(conn net.Conn, args []string) {
 			}
 			break
 		}
-		if string(reply) == Heartbeat {
+		if string(cmd) == CmdHeartBeat {
 			if _, err = conn.Write(HeartbeatReply); err != nil {
 				log.Error("<%s> user_key:\"%s\" conn.Write() failed, write heartbeat to client error(%v)", addr, key, err)
 				break
 			}
-			log.Debug("<%s> user_key:\"%s\" receive heartbeat (%s)", addr, key, reply)
+			log.Debug("<%s> user_key:\"%s\" receive heartbeat (%s)", addr, key, cmd)
 		} else {
-			log.Warn("<%s> user_key:\"%s\" unknown heartbeat protocol (%s)", addr, key, reply)
+			log.Warn("<%s> user_key:\"%s\" unknown heartbeat protocol (%s)", addr, key, cmd)
 			break
 		}
 		end = time.Now().UnixNano()
