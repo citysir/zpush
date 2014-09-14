@@ -1,4 +1,4 @@
-sh setenv.sh
+export GOPATH=/data/apps/go
 
 yum install git hg -y
 
