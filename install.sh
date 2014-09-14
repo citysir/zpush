@@ -6,6 +6,8 @@ mkdir -p /data/apps/go/src/code.google.com/p
 cd /data/apps/go/src/code.google.com/p
 
 hg clone https://code.google.com/p/goprotobuf
+hg clone https://code.google.com/p/log4go
+
 cd /data/apps/go/src/code.google.com/p/goprotobuf
 make
 

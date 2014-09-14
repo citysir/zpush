@@ -17,7 +17,6 @@ var (
 func init() {
 	flag.StringVar(&confFile, "c", "./node.conf", " set node config file path")
 	flag.Parse()
-	log.Info("node ver: \"%s\" start", ver.Version)
 	if err := initConfig(confFile); err != nil {
 		panic(err)
 	}
