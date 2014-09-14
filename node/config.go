@@ -9,16 +9,13 @@ import (
 )
 
 var (
-	Conf *Config
+	Conf     *Config
+	confFile string
 )
 
 func init() {
 	var confFile string
-	flag.StringVar(&confFile, "c", "./node.conf", " set node config file path")
-	flag.Parse()
-	if err := initConfig(confFile); err != nil {
-		panic(err)
-	}
+	flag.StringVar(&confFile, "c", "./node.conf", "set node config file path")
 }
 
 type Config struct {
@@ -33,7 +30,8 @@ type Config struct {
 	ChannelBucket int    `json:"ChannelBucket"`
 }
 
-func initConfig(confFile string) error {
+func InitConfig() error {
+	flag.Parse()
 	Conf = &Config{
 		// base
 		PidFile:    "/tmp/zpush-node.pid",
