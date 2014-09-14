@@ -46,7 +46,13 @@ func (c *Connection) HandleWrite(key string) {
 				return
 			}
 			msg = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), string(msg)))
-			n, err = c.Conn.Write(msg)
+			n, err := c.Conn.Write(msg)
+			// update stat
+			if err != nil {
+				log.Error("user_key: \"%s\" conn.Write() error(%v)", key, err)
+			} else {
+				log.Debug("user_key: \"%s\" write \r\n========%s(%d)========", key, string(msg), n)
+			}
 		}
 	}()
 }
