@@ -3,7 +3,7 @@ package main
 import (
 	log "code.google.com/p/log4go"
 	"errors"
-	"fmt"
+	// "fmt"
 	"github.com/citysir/golib/hash"
 	"github.com/citysir/zpush/proto"
 	"net"
@@ -13,15 +13,15 @@ import (
 var (
 	ErrChannelNotExist = errors.New("Channel not exist")
 	ErrConnProto       = errors.New("Unknown connection protocol")
-	ChannelHome        *ChannelHome
-	NodeRing           *hash.HashRing
+	// ChannelHome        *ChannelHome
+	NodeRing *hash.HashRing
 )
 
 // The subscriber interface.
 type Channel interface {
 	PushMsg(key string, m *proto.Message, expire uint) error
-	AddConn(key string, conn *Connection) (*HilstNode, error)
-	RemoveConn(key string, e *HilstNode) error
+	AddConn(key string, conn *Connection) (*HlistNode, error)
+	RemoveConn(key string, e *HlistNode) error
 	Close() error
 }
 
@@ -52,7 +52,7 @@ func (c *Connection) HandleWrite(key string) {
 // Write different message to client by different protocol
 func (c *Connection) Write(key string, msg []byte) {
 	select {
-	case c.Buf <- msg:
+	case c.Msgs <- msg:
 	default:
 		c.Conn.Close()
 		log.Warn("user_key: \"%s\" discard message: \"%s\" and close connection", key, string(msg))
@@ -61,12 +61,14 @@ func (c *Connection) Write(key string, msg []byte) {
 
 // Channel bucket.
 type ChannelBucket struct {
-	Channels map[string]Channel
+	channels map[string]Channel
 	mutex    *sync.Mutex
 }
 
 // ChannelBuckets.
-type ChannelHome []*ChannelBucket
+type ChannelHome struct {
+	buckets []*ChannelBucket
+}
 
 // Lock lock the bucket mutex.
 func (c *ChannelBucket) Lock() {
@@ -80,6 +82,7 @@ func (c *ChannelBucket) Unlock() {
 
 func NewChannelHome() *ChannelHome {
 	channelHome := new(ChannelHome)
+	channelHome.buckets = make(*ChannelBucket)
 	// split hashmap to many bucket
 	log.Debug("create %d ChannelHome", Conf.ChannelBucket)
 	for i := 0; i < Conf.ChannelBucket; i++ {
@@ -87,7 +90,7 @@ func NewChannelHome() *ChannelHome {
 			Channels: map[string]Channel{},
 			mutex:    &sync.Mutex{},
 		}
-		channelHome = append(channelHome, bucket)
+		channelHome.buckets = append(channelHome.buckets, bucket)
 	}
 	return l
 }
@@ -96,7 +99,7 @@ func NewChannelHome() *ChannelHome {
 func (this *ChannelHome) Count() int {
 	c := 0
 	for i := 0; i < Conf.ChannelBucket; i++ {
-		c += len(this.Channels)
+		c += len(this.buckets.channels)
 	}
 	return c
 }
@@ -107,7 +110,7 @@ func (this *ChannelHome) bucket(key string) *ChannelBucket {
 	h.Write([]byte(key))
 	idx := uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
 	log.Debug("user_key:\"%s\" hit channel bucket index:%d", key, idx)
-	return l.Channels[idx]
+	return this.buckets[idx]
 }
 
 // bucketIdx return a channelBucket index.
