@@ -28,10 +28,8 @@ type Channel interface {
 
 // Connection
 type Connection struct {
-	Conn    net.Conn
-	Proto   uint8
-	Version string
-	Buf     chan []byte
+	Conn     net.Conn
+	Messages chan []byte
 }
 
 // HandleWrite start a goroutine get msg from chan, then send to the conn.
@@ -83,14 +81,12 @@ func (c *Connection) Write(key string, msg []byte) {
 
 // Channel bucket.
 type ChannelBucket struct {
-	Data  map[string]Channel
-	mutex *sync.Mutex
+	Channels map[string]Channel
+	mutex    *sync.Mutex
 }
 
-// Channel list.
-type ChannelList struct {
-	Channels []*ChannelBucket
-}
+// ChannelBuckets.
+type ChannelHome []*ChannelBucket
 
 // Lock lock the bucket mutex.
 func (c *ChannelBucket) Lock() {
@@ -102,11 +98,10 @@ func (c *ChannelBucket) Unlock() {
 	c.mutex.Unlock()
 }
 
-// NewChannelList create a new channel bucket set.
-func NewChannelList() *ChannelList {
-	l := &ChannelList{Channels: []*ChannelBucket{}}
+func NewChannelHome() *ChannelHome {
+	channelHome := new(ChannelHome)
 	// split hashmap to many bucket
-	log.Debug("create %d ChannelBucket", Conf.ChannelBucket)
+	log.Debug("create %d ChannelHome", Conf.ChannelBucket)
 	for i := 0; i < Conf.ChannelBucket; i++ {
 		c := &ChannelBucket{
 			Data:  map[string]Channel{},

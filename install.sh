@@ -5,9 +5,9 @@ yum install git hg -y
 mkdir -p /data/apps/go/src/code.google.com/p
 cd /data/apps/go/src/code.google.com/p
 
-hg clone https://code.google.com/p/goprotobuf/
-go install code.google.com/p/goprotobuf/proto
-ll /usr/bin/protoc
+hg clone https://code.google.com/p/goprotobuf
+cd /data/apps/go/src/code.google.com/p/goprotobuf
+make
 
 go get git.apache.org/thrift.git/lib/go/thrift
 
