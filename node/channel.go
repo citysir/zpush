@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	ErrChannelNotExist = errors.New("Channle not exist")
+	ErrChannelNotExist = errors.New("Channel not exist")
 	ErrConnProto       = errors.New("Unknown connection protocol")
 	UserChannel        *ChannelList
 	CometRing          *ketama.HashRing
