@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/citysir/golib/io/fileutil"
-	"io/ioutil"
 	"log"
 	"runtime"
-	"time"
 )
 
 var (
@@ -15,6 +13,7 @@ var (
 )
 
 func init() {
+	var confFile string
 	flag.StringVar(&confFile, "c", "./node.conf", " set node config file path")
 	flag.Parse()
 	if err := initConfig(confFile); err != nil {

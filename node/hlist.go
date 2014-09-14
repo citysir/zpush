@@ -47,7 +47,7 @@ func (l *Hlist) PushFront(conn *Connection) *HlistNode {
 // It returns the node value n.Conn.
 func (l *Hlist) Remove(n *HlistNode) *Connection {
 	next := n.next
-	pprev := npprev
+	pprev := n.pprev
 	*pprev = next
 	if next != nil {
 		next.pprev = pprev
