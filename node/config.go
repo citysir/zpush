@@ -33,7 +33,7 @@ type Config struct {
 	ChannelBucket int    `json:"ChannelBucket"`
 }
 
-func initConfig(confFile string) {
+func initConfig(confFile string) error {
 	Conf = &Config{
 		// base
 		PidFile:    "/tmp/zpush-node.pid",
@@ -51,13 +51,13 @@ func initConfig(confFile string) {
 
 	confText, err := fileutil.ReadText(confFile)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	var config Config
-	err = json.Unmarshal([]byte(jsonStr), &config)
+	err = json.Unmarshal([]byte(confText), &config)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	log.Println(confText)
