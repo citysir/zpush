@@ -117,112 +117,112 @@ func (this *ChannelHome) BucketIdx(key *string) uint {
 }
 
 // New create a user channel.
-func (this *ChannelHome) New(key string) (Channel, error) {
-	// get a channel bucket
-	b := this.bucket(key)
-	b.Lock()
-	if c, ok := b.Data[key]; ok {
-		b.Unlock()
-		return c, nil
-	} else {
-		c = NewSeqChannel()
-		b.Data[key] = c
-		b.Unlock()
-		return c, nil
-	}
-}
+// func (this *ChannelHome) New(key string) (Channel, error) {
+// 	// get a channel bucket
+// 	b := this.bucket(key)
+// 	b.Lock()
+// 	if c, ok := b.Channels[key]; ok {
+// 		b.Unlock()
+// 		return c, nil
+// 	} else {
+// 		c = NewSeqChannel()
+// 		b.Channels[key] = c
+// 		b.Unlock()
+// 		return c, nil
+// 	}
+// }
 
 // Get a user channel from ChannelHome.
-func (this *ChannelHome) Get(key string, newOne bool) (Channel, error) {
-	// get a channel bucket
-	b := this.bucket(key)
-	b.Lock()
-	if c, ok := b.Data[key]; !ok {
-		if !Conf.Auth && newOne {
-			c = NewSeqChannel()
-			b.Data[key] = c
-			b.Unlock()
-			return c, nil
-		} else {
-			b.Unlock()
-			log.Warn("user_key:\"%s\" channle not exists", key)
-			return nil, ErrChannelNotExist
-		}
-	} else {
-		b.Unlock()
-		return c, nil
-	}
-}
+// func (this *ChannelHome) Get(key string, newOne bool) (Channel, error) {
+// 	// get a channel bucket
+// 	b := this.bucket(key)
+// 	b.Lock()
+// 	if c, ok := b.Channels[key]; !ok {
+// 		if !Conf.Auth && newOne {
+// 			c = NewSeqChannel()
+// 			b.Channels[key] = c
+// 			b.Unlock()
+// 			return c, nil
+// 		} else {
+// 			b.Unlock()
+// 			log.Warn("user_key:\"%s\" channle not exists", key)
+// 			return nil, ErrChannelNotExist
+// 		}
+// 	} else {
+// 		b.Unlock()
+// 		return c, nil
+// 	}
+// }
 
-// Delete a user channel from ChannleList.
-func (l *ChannelHome) Delete(key string) (Channel, error) {
-	// get a channel bucket
-	b := l.bucket(key)
-	b.Lock()
-	if c, ok := b.Data[key]; !ok {
-		b.Unlock()
-		log.Warn("user_key:\"%s\" delete channle not exists", key)
-		return nil, ErrChannelNotExist
-	} else {
-		delete(b.Data, key)
-		b.Unlock()
-		ChStat.IncrDelete()
-		log.Info("user_key:\"%s\" delete channel", key)
-		return c, nil
-	}
-}
+// // Delete a user channel from ChannleList.
+// func (l *ChannelHome) Delete(key string) (Channel, error) {
+// 	// get a channel bucket
+// 	b := l.bucket(key)
+// 	b.Lock()
+// 	if c, ok := b.Channels[key]; !ok {
+// 		b.Unlock()
+// 		log.Warn("user_key:\"%s\" delete channle not exists", key)
+// 		return nil, ErrChannelNotExist
+// 	} else {
+// 		delete(b.Channels, key)
+// 		b.Unlock()
+// 		ChStat.IncrDelete()
+// 		log.Info("user_key:\"%s\" delete channel", key)
+// 		return c, nil
+// 	}
+// }
 
-// Close close all channel.
-func (l *ChannelHome) Close() {
-	log.Info("channel close")
-	chs := make([]Channel, 0, l.Count())
-	for _, c := range l.Channels {
-		c.Lock()
-		for _, c := range c.Data {
-			chs = append(chs, c)
-		}
-		c.Unlock()
-	}
-	// close all channels
-	for _, c := range chs {
-		if err := c.Close(); err != nil {
-			log.Error("c.Close() error(%v)", err)
-		}
-	}
-}
+// // Close close all channel.
+// func (l *ChannelHome) Close() {
+// 	log.Info("channel close")
+// 	chs := make([]Channel, 0, l.Count())
+// 	for _, c := range l.Channels {
+// 		c.Lock()
+// 		for _, c := range c.Channels {
+// 			chs = append(chs, c)
+// 		}
+// 		c.Unlock()
+// 	}
+// 	// close all channels
+// 	for _, c := range chs {
+// 		if err := c.Close(); err != nil {
+// 			log.Error("c.Close() error(%v)", err)
+// 		}
+// 	}
+// }
 
 // Migrate migrate portion of connections which don`t belong to this Comet
-func (l *ChannelHome) Migrate() {
-	// init ketama
-	ring := ketama.NewRing(Conf.KetamaBase)
-	for node, weight := range nodeWeightMap {
-		ring.AddNode(node, weight)
-	}
-	ring.Bake()
-	CometRing = ring
+// func (l *ChannelHome) Migrate() {
+// 	// init ketama
+// 	ring := ketama.NewRing(Conf.KetamaBase)
+// 	for node, weight := range nodeWeightMap {
+// 		ring.AddNode(node, weight)
+// 	}
+// 	ring.Bake()
+// 	NodeRing = ring
 
-	// get all the channel lock
-	channels := []Channel{}
-	for i, c := range l.Channels {
-		c.Lock()
-		for k, v := range c.Data {
-			hn := ring.Hash(k)
-			if hn != Conf.ZookeeperCometNode {
-				channels = append(channels, v)
-				delete(c.Data, k)
-				log.Debug("migrate delete channel key \"%s\"", k)
-			}
-		}
-		c.Unlock()
-		log.Debug("migrate channel bucket:%d finished", i)
-	}
-	// close all the migrate channels
-	log.Info("close all the migrate channels")
-	for _, channel := range channels {
-		if err := channel.Close(); err != nil {
-			log.Error("channel.Close() error(%v)", err)
-			continue
-		}
-	}
-	log.Info("close all the migrate channels finished")
-}
+// 	// get all the channel lock
+// 	channels := []Channel{}
+// 	for i, c := range l.Channels {
+// 		c.Lock()
+// 		for k, v := range c.Channels {
+// 			hn := ring.Hash(k)
+// 			if hn != Conf.ZookeeperNode {
+// 				channels = append(channels, v)
+// 				delete(c.Channels, k)
+// 				log.Debug("migrate delete channel key \"%s\"", k)
+// 			}
+// 		}
+// 		c.Unlock()
+// 		log.Debug("migrate channel bucket:%d finished", i)
+// 	}
+// 	// close all the migrate channels
+// 	log.Info("close all the migrate channels")
+// 	for _, channel := range channels {
+// 		if err := channel.Close(); err != nil {
+// 			log.Error("channel.Close() error(%v)", err)
+// 			continue
+// 		}
+// 	}
+// 	log.Info("close all the migrate channels finished")
+// }
