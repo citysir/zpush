@@ -13,8 +13,8 @@ import (
 var (
 	ErrChannelNotExist = errors.New("Channel not exist")
 	ErrConnProto       = errors.New("Unknown connection protocol")
-	// ChannelManager        *ChannelManager
-	NodeRing *hash.HashRing
+	ChannelManager     *ChannelManagerStruct
+	NodeRing           *hash.HashRing
 )
 
 // The subscriber interface.
@@ -74,7 +74,7 @@ type ChannelBucket struct {
 }
 
 // ChannelBuckets.
-type ChannelManager struct {
+type ChannelManagerStruct struct {
 	buckets []*ChannelBucket
 }
 
@@ -88,11 +88,11 @@ func (c *ChannelBucket) Unlock() {
 	c.mutex.Unlock()
 }
 
-func NewChannelManager() *ChannelManager {
-	channelManager := new(ChannelManager)
+func NewChannelManager() *ChannelManagerStruct {
+	channelManager := new(ChannelManagerStruct)
 	channelManager.buckets = []*ChannelBucket{}
 	// split hashmap to many bucket
-	log.Debug("create %d ChannelManager", Conf.ChannelBucket)
+	log.Debug("create %d ChannelManagerStruct", Conf.ChannelBucket)
 	for i := 0; i < Conf.ChannelBucket; i++ {
 		bucket := &ChannelBucket{
 			channels: map[string]Channel{},
@@ -104,7 +104,7 @@ func NewChannelManager() *ChannelManager {
 }
 
 // Count get the bucket total channel count.
-func (this *ChannelManager) Count() int {
+func (this *ChannelManagerStruct) Count() int {
 	c := 0
 	for i := 0; i < Conf.ChannelBucket; i++ {
 		c += len(this.buckets[i].channels)
@@ -113,7 +113,7 @@ func (this *ChannelManager) Count() int {
 }
 
 // bucket return a channelBucket use murmurhash3.
-func (this *ChannelManager) bucket(key string) *ChannelBucket {
+func (this *ChannelManagerStruct) bucket(key string) *ChannelBucket {
 	h := hash.NewMurmur3C()
 	h.Write([]byte(key))
 	idx := uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
@@ -122,14 +122,14 @@ func (this *ChannelManager) bucket(key string) *ChannelBucket {
 }
 
 // bucketIdx return a channelBucket index.
-func (this *ChannelManager) BucketIdx(key *string) uint {
+func (this *ChannelManagerStruct) BucketIdx(key *string) uint {
 	h := hash.NewMurmur3C()
 	h.Write([]byte(*key))
 	return uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
 }
 
 // New create a user channel.
-// func (this *ChannelManager) New(key string) (Channel, error) {
+// func (this *ChannelManagerStruct) New(key string) (Channel, error) {
 // 	// get a channel bucket
 // 	b := this.bucket(key)
 // 	b.Lock()
@@ -144,8 +144,8 @@ func (this *ChannelManager) BucketIdx(key *string) uint {
 // 	}
 // }
 
-// Get a user channel from ChannelManager.
-// func (this *ChannelManager) Get(key string, newOne bool) (Channel, error) {
+// Get a user channel from ChannelManagerStruct.
+// func (this *ChannelManagerStruct) Get(key string, newOne bool) (Channel, error) {
 // 	// get a channel bucket
 // 	b := this.bucket(key)
 // 	b.Lock()
@@ -167,7 +167,7 @@ func (this *ChannelManager) BucketIdx(key *string) uint {
 // }
 
 // // Delete a user channel from ChannleList.
-// func (l *ChannelManager) Delete(key string) (Channel, error) {
+// func (l *ChannelManagerStruct) Delete(key string) (Channel, error) {
 // 	// get a channel bucket
 // 	b := l.bucket(key)
 // 	b.Lock()
@@ -185,7 +185,7 @@ func (this *ChannelManager) BucketIdx(key *string) uint {
 // }
 
 // // Close close all channel.
-// func (l *ChannelManager) Close() {
+// func (l *ChannelManagerStruct) Close() {
 // 	log.Info("channel close")
 // 	chs := make([]Channel, 0, l.Count())
 // 	for _, c := range l.Channels {
@@ -204,7 +204,7 @@ func (this *ChannelManager) BucketIdx(key *string) uint {
 // }
 
 // Migrate migrate portion of connections which don`t belong to this Comet
-// func (l *ChannelManager) Migrate() {
+// func (l *ChannelManagerStruct) Migrate() {
 // 	// init ketama
 // 	ring := ketama.NewRing(Conf.KetamaBase)
 // 	for node, weight := range nodeWeightMap {

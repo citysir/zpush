@@ -3,5 +3,5 @@ package main
 import "fmt"
 
 func main() {
-	fmt.Println("Hello, join")
+	fmt.Println("Hello, push")
 }

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"github.com/citysir/golib/io/fileutil"
 	"log"
+	"math"
 	"runtime"
 )
 
@@ -20,35 +21,37 @@ func init() {
 type Config struct {
 	PidFile       string `json:"PidFile"`
 	Log           string `json:"Log"`
-	TCPBind       string `json:"TCPBind"`
-	RPCBind       string `json:"RPCBind"`
-	PprofBind     string `json:"PprofBind"`
-	StatBind      string `json:"StatBind"`
-	MaxProc       int    `json:"MaxProc"`
+	TcpAddr       string `json:"TcpAddr"`
+	RpcAddr       string `json:"RpcAddr"`
+	PprofAddr     string `json:"PprofAddr"`
+	StatAddr      string `json:"StatAddr"`
+	MaxCore       int    `json:"MaxCore"`
 	KetamaBase    int    `json:"KetamaBase"`
 	ChannelBucket int    `json:"ChannelBucket"`
+
+	WriteBufferSize     int  `json:"WriteBufferSize"`
+	ReadeBufferSize     int  `json:"ReadBufferSize"`
+	BufioInstance       int  `json:"BufioInstance"`
+	BufioNumPerInstance int  `json:"BufioNumPerInstance"`
+	TcpKeepalive        bool `json:"TcpKeepalive"`
+
+	ZookeeperAddr            string `json:"ZookeeperAddr"`
+	ZookeeperTimeout         int    `json:"ZookeeperTimeout"`
+	ZookeeperLocation        string `json:"ZookeeperLocation"`
+	ZookeeperName            string `json:"ZookeeperName"`
+	ZookeeperWeight          int    `json:"ZookeeperWeight"`
+	ZookeeperOfflineLocation string `json:"ZookeeperOfflineLocation"`
 }
 
 func InitConfig() {
-	log.Printf("conf %s\n", confFile)
-	Conf = &Config{
-		// base
-		PidFile:    "/tmp/zpush-node.pid",
-		MaxProc:    runtime.NumCPU(),
-		TCPBind:    "localhost:6969",
-		RPCBind:    "localhost:6970",
-		PprofBind:  "localhost:6971",
-		StatBind:   "localhost:6972",
-		KetamaBase: 255,
-
-		// channel
-		ChannelBucket: runtime.NumCPU(),
-	}
+	log.Printf("InitConfig %s\n", confFile)
 
 	confText, err := fileutil.ReadText(confFile)
 	if err != nil {
 		panic(err)
 	}
+
+	log.Println(confText)
 
 	var config Config
 	err = json.Unmarshal([]byte(confText), &config)
@@ -56,5 +59,9 @@ func InitConfig() {
 		panic(err)
 	}
 
-	log.Println(confText)
+	Conf = &config
+
+	Conf.MaxCore = math.MaxInt32(Conf.MaxCore, runtime.NumCPU())
+	Conf.ChannelBucket = math.MaxInt32(Conf.ChannelBucket, runtime.NumCPU())
+	Conf.BufioInstance = math.MaxInt32(Conf.BufioInstance, runtime.NumCPU())
 }
