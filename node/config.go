@@ -61,4 +61,5 @@ func initConfig(confFile string) error {
 	}
 
 	log.Println(confText)
+	return nil
 }
