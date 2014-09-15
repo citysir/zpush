@@ -26,7 +26,6 @@ func (this *RpcServiceImpl) FunCall(callTime int64, funCode string, paramMap map
 func main() {
 	transportFactory := thrift.NewTFramedTransportFactory(thrift.NewTTransportFactory())
 	protocolFactory := thrift.NewTBinaryProtocolFactoryDefault()
-	//protocolFactory := thrift.NewTCompactProtocolFactory()
 
 	serverTransport, err := thrift.NewTServerSocket(NetworkAddr)
 	if err != nil {
