@@ -1,241 +1,173 @@
+// Copyright © 2014 Terry Mao, LiuDing All rights reserved.
+// This file is part of gopush-cluster.
+
+// gopush-cluster is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// gopush-cluster is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with gopush-cluster.  If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
 	log "code.google.com/p/log4go"
 	"errors"
-	"fmt"
-	"github.com/citysir/golib/hash"
-	"github.com/citysir/zpush/proto"
-	"net"
+	myrpc "github.com/Terry-Mao/gopush-cluster/rpc"
 	"sync"
 )
 
 var (
-	ErrChannelNotExist = errors.New("Channel not exist")
-	ErrConnProto       = errors.New("Unknown connection protocol")
-	ChannelManager     *ChannelManagerStruct
-	NodeRing           *hash.HashRing
+	ErrMessageSave   = errors.New("Message set failed")
+	ErrMessageGet    = errors.New("Message get failed")
+	ErrMessageRPC    = errors.New("Message RPC not init")
+	ErrAssectionConn = errors.New("Assection type Connection failed")
 )
 
-// The subscriber interface.
-type Channel interface {
-	PushMsg(key string, m *proto.Message, expire uint) error
-	AddConn(key string, conn *Connection) (*HlistNode, error)
-	RemoveConn(key string, e *HlistNode) error
-	Close() error
+// Sequence Channel struct.
+type Channel struct {
+	// Mutex
+	mutex *sync.Mutex
+	// client conn double linked-list
+	connList *Hlist
+	// TODO Remove time id or lazy New
+	timeID *id.TimeID
+	// token
+	auth bool
 }
 
-// Connection
-type Connection struct {
-	Conn    net.Conn
-	Version string
-	Msgs    chan []byte
-}
-
-// HandleWrite start a goroutine get msg from chan, then send to the conn.
-func (c *Connection) HandleWrite(key string) {
-	go func() {
-		var (
-			n   int
-			err error
-		)
-		log.Debug("user_key: \"%s\" HandleWrite goroutine start", key)
-		for {
-			msg, ok := <-c.Msgs
-			if !ok {
-				log.Debug("user_key: \"%s\" HandleWrite goroutine stop", key)
-				return
-			}
-			msg = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), string(msg)))
-			n, err = c.Conn.Write(msg)
-			// update stat
-			if err != nil {
-				log.Error("user_key: \"%s\" conn.Write() error(%v)", key, err)
-			} else {
-				log.Debug("user_key: \"%s\" write \r\n========%s(%d)========", key, string(msg), n)
-			}
-		}
-	}()
-}
-
-// Write different message to client by different protocol
-func (c *Connection) Write(key string, msg []byte) {
-	select {
-	case c.Msgs <- msg:
-	default:
-		c.Conn.Close()
-		log.Warn("user_key: \"%s\" discard message: \"%s\" and close connection", key, string(msg))
+// New a user seq stored message channel.
+func NewChannel() *Channel {
+	return &Channel{
+		mutex:    &sync.Mutex{},
+		connList: hlist.New(),
+		timeID:   id.NewTimeID(),
+		token:    nil,
 	}
 }
 
-// Channel bucket.
-type ChannelBucket struct {
-	channels map[string]Channel
-	mutex    *sync.Mutex
+// AddToken implements the Channel AddToken method.
+func (c *Channel) AddToken(key, token string) error {
+	return nil
 }
 
-// ChannelBuckets.
-type ChannelManagerStruct struct {
-	buckets []*ChannelBucket
+// AuthToken implements the Channel AuthToken method.
+func (c *Channel) AuthToken(key, token string) bool {
+	return true
 }
 
-// Lock lock the bucket mutex.
-func (c *ChannelBucket) Lock() {
+// PushMsg implements the Channel PushMsg method.
+func (c *Channel) PushMsg(key string, m *Message, expire uint) error {
+	var (
+		oldMsg, msg, sendMsg []byte
+		err                  error
+	)
+	client := myrpc.MessageRPC.Get()
+	if client == nil {
+		return ErrMessageRPC
+	}
 	c.mutex.Lock()
-}
-
-// Unlock unlock the bucket mutex.
-func (c *ChannelBucket) Unlock() {
-	c.mutex.Unlock()
-}
-
-func NewChannelManager() *ChannelManagerStruct {
-	channelManager := new(ChannelManagerStruct)
-	channelManager.buckets = []*ChannelBucket{}
-	// split hashmap to many bucket
-	log.Debug("create %d ChannelManagerStruct", Conf.ChannelBucket)
-	for i := 0; i < Conf.ChannelBucket; i++ {
-		bucket := &ChannelBucket{
-			channels: map[string]Channel{},
-			mutex:    &sync.Mutex{},
+	// private message need persistence
+	// if message expired no need persistence, only send online message
+	// rewrite message id
+	m.MsgId = c.timeID.ID()
+	if m.GroupId != myrpc.PublicGroupId && expire > 0 {
+		args := &myrpc.MessageSavePrivateArgs{Key: key, Msg: m.Msg, MsgId: m.MsgId, Expire: expire}
+		ret := 0
+		if err = client.Call(myrpc.MessageServiceSavePrivate, args, &ret); err != nil {
+			c.mutex.Unlock()
+			log.Error("%s(\"%s\", \"%v\", &ret) error(%v)", myrpc.MessageServiceSavePrivate, key, args, err)
+			return err
 		}
-		channelManager.buckets = append(channelManager.buckets, bucket)
 	}
-	return channelManager
-}
-
-// Count get the bucket total channel count.
-func (this *ChannelManagerStruct) Count() int {
-	c := 0
-	for i := 0; i < Conf.ChannelBucket; i++ {
-		c += len(this.buckets[i].channels)
+	// push message
+	for e := c.conn.Front(); e != nil; e = e.Next() {
+		conn, _ := e.Value.(*Connection)
+		// if version empty then use old protocol
+		if conn.Version == "" {
+			if oldMsg == nil {
+				oldMsg, err = m.OldBytes()
+				if err != nil {
+					c.mutex.Unlock()
+					return err
+				}
+			}
+			sendMsg = oldMsg
+		} else {
+			if msg == nil {
+				msg, err = m.Bytes()
+				if err != nil {
+					c.mutex.Unlock()
+					return err
+				}
+			}
+			sendMsg = msg
+		}
+		conn.Write(key, sendMsg)
 	}
-	return c
+	c.mutex.Unlock()
+	return nil
 }
 
-// bucket return a channelBucket use murmurhash3.
-func (this *ChannelManagerStruct) bucket(key string) *ChannelBucket {
-	h := hash.NewMurmur3C()
-	h.Write([]byte(key))
-	idx := uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
-	log.Debug("user_key:\"%s\" hit channel bucket index:%d", key, idx)
-	return this.buckets[idx]
+// AddConn implements the Channel AddConn method.
+func (c *Channel) AddConn(key string, conn *Connection) (*hlist.Element, error) {
+	c.mutex.Lock()
+	if c.conn.Len()+1 > Conf.MaxSubscriberPerChannel {
+		c.mutex.Unlock()
+		log.Error("user_key:\"%s\" exceed conn", key)
+		return nil, ErrMaxConn
+	}
+	// send first heartbeat to tell client service is ready for accept heartbeat
+	if _, err := conn.Conn.Write(HeartbeatReply); err != nil {
+		c.mutex.Unlock()
+		log.Error("user_key:\"%s\" write first heartbeat to client error(%v)", key, err)
+		return nil, err
+	}
+	// add conn
+	conn.Buf = make(chan []byte, Conf.MsgBufNum)
+	conn.HandleWrite(key)
+	e := c.conn.PushFront(conn)
+	c.mutex.Unlock()
+	ConnStat.IncrAdd()
+	log.Info("user_key:\"%s\" add conn = %d", key, c.conn.Len())
+	return e, nil
 }
 
-// bucketIdx return a channelBucket index.
-func (this *ChannelManagerStruct) BucketIdx(key *string) uint {
-	h := hash.NewMurmur3C()
-	h.Write([]byte(*key))
-	return uint(h.Sum32()) & uint(Conf.ChannelBucket-1)
+// RemoveConn implements the Channel RemoveConn method.
+func (c *Channel) RemoveConn(key string, e *hlist.Element) error {
+	c.mutex.Lock()
+	tmp := c.conn.Remove(e)
+	c.mutex.Unlock()
+	conn, ok := tmp.(*Connection)
+	if !ok {
+		return ErrAssectionConn
+	}
+	close(conn.Buf)
+	ConnStat.IncrRemove()
+	log.Info("user_key:\"%s\" remove conn = %d", key, c.conn.Len())
+	return nil
 }
 
-// New create a user channel.
-// func (this *ChannelManagerStruct) New(key string) (Channel, error) {
-// 	// get a channel bucket
-// 	b := this.bucket(key)
-// 	b.Lock()
-// 	if c, ok := b.Channels[key]; ok {
-// 		b.Unlock()
-// 		return c, nil
-// 	} else {
-// 		c = NewSeqChannel()
-// 		b.Channels[key] = c
-// 		b.Unlock()
-// 		return c, nil
-// 	}
-// }
-
-// Get a user channel from ChannelManagerStruct.
-// func (this *ChannelManagerStruct) Get(key string, newOne bool) (Channel, error) {
-// 	// get a channel bucket
-// 	b := this.bucket(key)
-// 	b.Lock()
-// 	if c, ok := b.Channels[key]; !ok {
-// 		if !Conf.Auth && newOne {
-// 			c = NewSeqChannel()
-// 			b.Channels[key] = c
-// 			b.Unlock()
-// 			return c, nil
-// 		} else {
-// 			b.Unlock()
-// 			log.Warn("user_key:\"%s\" channle not exists", key)
-// 			return nil, ErrChannelNotExist
-// 		}
-// 	} else {
-// 		b.Unlock()
-// 		return c, nil
-// 	}
-// }
-
-// // Delete a user channel from ChannleList.
-// func (l *ChannelManagerStruct) Delete(key string) (Channel, error) {
-// 	// get a channel bucket
-// 	b := l.bucket(key)
-// 	b.Lock()
-// 	if c, ok := b.Channels[key]; !ok {
-// 		b.Unlock()
-// 		log.Warn("user_key:\"%s\" delete channle not exists", key)
-// 		return nil, ErrChannelNotExist
-// 	} else {
-// 		delete(b.Channels, key)
-// 		b.Unlock()
-// 		ChStat.IncrDelete()
-// 		log.Info("user_key:\"%s\" delete channel", key)
-// 		return c, nil
-// 	}
-// }
-
-// // Close close all channel.
-// func (l *ChannelManagerStruct) Close() {
-// 	log.Info("channel close")
-// 	chs := make([]Channel, 0, l.Count())
-// 	for _, c := range l.Channels {
-// 		c.Lock()
-// 		for _, c := range c.Channels {
-// 			chs = append(chs, c)
-// 		}
-// 		c.Unlock()
-// 	}
-// 	// close all channels
-// 	for _, c := range chs {
-// 		if err := c.Close(); err != nil {
-// 			log.Error("c.Close() error(%v)", err)
-// 		}
-// 	}
-// }
-
-// Migrate migrate portion of connections which don`t belong to this Comet
-// func (l *ChannelManagerStruct) Migrate() {
-// 	// init ketama
-// 	ring := ketama.NewRing(Conf.KetamaBase)
-// 	for node, weight := range nodeWeightMap {
-// 		ring.AddNode(node, weight)
-// 	}
-// 	ring.Bake()
-// 	NodeRing = ring
-
-// 	// get all the channel lock
-// 	channels := []Channel{}
-// 	for i, c := range l.Channels {
-// 		c.Lock()
-// 		for k, v := range c.Channels {
-// 			hn := ring.Hash(k)
-// 			if hn != Conf.ZookeeperNode {
-// 				channels = append(channels, v)
-// 				delete(c.Channels, k)
-// 				log.Debug("migrate delete channel key \"%s\"", k)
-// 			}
-// 		}
-// 		c.Unlock()
-// 		log.Debug("migrate channel bucket:%d finished", i)
-// 	}
-// 	// close all the migrate channels
-// 	log.Info("close all the migrate channels")
-// 	for _, channel := range channels {
-// 		if err := channel.Close(); err != nil {
-// 			log.Error("channel.Close() error(%v)", err)
-// 			continue
-// 		}
-// 	}
-// 	log.Info("close all the migrate channels finished")
-// }
+// Close implements the Channel Close method.
+func (c *Channel) Close() error {
+	c.mutex.Lock()
+	for e := c.conn.Front(); e != nil; e = e.Next() {
+		if conn, ok := e.Value.(*Connection); !ok {
+			c.mutex.Unlock()
+			return ErrAssectionConn
+		} else {
+			if err := conn.Conn.Close(); err != nil {
+				// ignore close error
+				log.Warn("conn.Close() error(%v)", err)
+			}
+		}
+	}
+	c.mutex.Unlock()
+	return nil
+}

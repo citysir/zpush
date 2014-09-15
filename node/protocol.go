@@ -6,9 +6,9 @@ import (
 
 // The Message struct
 type Message struct {
-	GroupId uint   `json:"gid"` // group id
-	MsgId   int64  `json:"mid"` // message id
-	Msg     string `json:"msg"` // message content
+	TagId uint   `json:"tid"` // tag id
+	MsgId int64  `json:"mid"` // message id
+	Msg   string `json:"msg"` // message content
 }
 
 const (
@@ -45,7 +45,7 @@ $<参数N的字节长度>\r\n
 2 响应格式
 “+”只返回一行数据
 “-”发生了错误的提示信息
-“:”返回整形数值
+“:”返回整型数值
 “$”返回一组数据（也可以理解为一团，一批数据……）
 “*”返回多组数据
 */
