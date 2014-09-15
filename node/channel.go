@@ -68,7 +68,7 @@ func (c *Channel) PushMsg(key string, m *Message, expire uint) error {
 		oldMsg, msg, sendMsg []byte
 		err                  error
 	)
-	client := myrpc.MessageRPC.Get()
+	client := rpc.message.MessageService.Get()
 	if client == nil {
 		return ErrMessageRPC
 	}
@@ -77,7 +77,7 @@ func (c *Channel) PushMsg(key string, m *Message, expire uint) error {
 	// if message expired no need persistence, only send online message
 	// rewrite message id
 	m.MsgId = c.timeID.ID()
-	if m.GroupId != myrpc.PublicGroupId && expire > 0 {
+	if expire > 0 {
 		args := &myrpc.MessageSavePrivateArgs{Key: key, Msg: m.Msg, MsgId: m.MsgId, Expire: expire}
 		ret := 0
 		if err = client.Call(myrpc.MessageServiceSavePrivate, args, &ret); err != nil {
