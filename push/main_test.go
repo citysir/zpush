@@ -3,7 +3,6 @@ package main
 import (
 	"git.apache.org/thrift.git/lib/go/thrift"
 	"github.com/citysir/zpush/rpc/push"
-	"net"
 	"os"
 	"testing"
 	"time"
