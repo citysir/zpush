@@ -22,7 +22,7 @@ func TestPush(t *testing.T) {
 	}
 
 	useTransport := transportFactory.GetTransport(transport)
-	client := rpc.NewRpcServiceClientFactory(useTransport, protocolFactory)
+	client := rpc.NewPushServiceClientFactory(useTransport, protocolFactory)
 	if err := transport.Open(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error opening socket to 127.0.0.1:19090", " ", err)
 		os.Exit(1)

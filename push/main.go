@@ -35,7 +35,7 @@ func main() {
 	}
 
 	handler := &RpcServiceImpl{}
-	processor := push.NewRpcServiceProcessor(handler)
+	processor := push.NewPushServiceProcessor(handler)
 
 	server := thrift.NewTSimpleServer4(processor, serverTransport, transportFactory, protocolFactory)
 	fmt.Println("thrift server in", NetworkAddr)
