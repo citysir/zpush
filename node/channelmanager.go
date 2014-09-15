@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/citysir/golib/hash"
-	"github.com/citysir/zpush/proto"
 	"net"
 	"sync"
 )

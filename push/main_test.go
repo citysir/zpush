@@ -3,9 +3,9 @@ package push
 import (
 	"fmt"
 	"git.apache.org/thrift.git/lib/go/thrift"
+	"github.com/citysir/zpush/rpc/push"
 	"net"
 	"os"
-	"rpc/push"
 	"testing"
 	"time"
 )
