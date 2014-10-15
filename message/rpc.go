@@ -11,15 +11,19 @@ type MessageServiceImpl struct {
 }
 
 func (this *MessageServiceImpl) SavePrivateMessage(key string, message string, msgId int64, expire int64) (err error) {
-
+	fmt.Println("SavePrivateMessage", key, message, msgId, expire)
 	return
 }
 
-func bindRpcAddr() {
+func BindRpcAddr(addr string) {
+	go rpcListen(addr)
+}
+
+func rpcListen(addr string) {
 	transportFactory := thrift.NewTFramedTransportFactory(thrift.NewTTransportFactory())
 	protocolFactory := thrift.NewTBinaryProtocolFactoryDefault()
 
-	serverTransport, err := thrift.NewTServerSocket(NetworkAddr)
+	serverTransport, err := thrift.NewTServerSocket(addr)
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
@@ -29,6 +33,6 @@ func bindRpcAddr() {
 	processor := message.NewMessageServiceProcessor(handler)
 
 	server := thrift.NewTSimpleServer4(processor, serverTransport, transportFactory, protocolFactory)
-	fmt.Println("thrift server in", NetworkAddr)
+	fmt.Println("thrift server in", addr)
 	server.Serve()
 }

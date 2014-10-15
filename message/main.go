@@ -1,11 +1,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 )
 
 func main() {
-	fmt.Println("Hello, message")
+	flag.Parse()
 
-	go bindRpcAddr()
+	InitConfig()
+
+	BindRpcAddr()
 }

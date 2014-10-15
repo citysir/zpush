@@ -20,7 +20,7 @@ import (
 	"testing"
 )
 
-func TestTimeID(t *testing.T) {
+func Test_TimeID(t *testing.T) {
 	tid := NewTimeID()
 	a := tid.ID()
 	b := tid.ID()

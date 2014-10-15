@@ -19,7 +19,6 @@ package main
 import (
 	log "code.google.com/p/log4go"
 	"errors"
-	myrpc "github.com/Terry-Mao/gopush-cluster/rpc"
 	"sync"
 )
 
@@ -35,19 +34,18 @@ type Channel struct {
 	// Mutex
 	mutex *sync.Mutex
 	// client conn double linked-list
-	connList *Hlist
-	// TODO Remove time id or lazy New
-	timeID *id.TimeID
+	connections *Hlist
 	// token
-	auth bool
+	token string
 }
+
+var messageServiceProxy = NewMessageServiceProxy()
 
 // New a user seq stored message channel.
 func NewChannel() *Channel {
 	return &Channel{
 		mutex:    &sync.Mutex{},
 		connList: hlist.New(),
-		timeID:   id.NewTimeID(),
 		token:    nil,
 	}
 }
@@ -68,27 +66,21 @@ func (c *Channel) PushMsg(key string, m *Message, expire uint) error {
 		oldMsg, msg, sendMsg []byte
 		err                  error
 	)
-	client := rpc.message.MessageService.Get()
-	if client == nil {
-		return ErrMessageRPC
-	}
 	c.mutex.Lock()
 	// private message need persistence
 	// if message expired no need persistence, only send online message
 	// rewrite message id
 	m.MsgId = c.timeID.ID()
 	if expire > 0 {
-		args := &myrpc.MessageSavePrivateArgs{Key: key, Msg: m.Msg, MsgId: m.MsgId, Expire: expire}
-		ret := 0
-		if err = client.Call(myrpc.MessageServiceSavePrivate, args, &ret); err != nil {
+		if err = messageServiceProxy.SavePrivateMessage(key, m.Msg, m.MsgId, expire); err != nil {
 			c.mutex.Unlock()
-			log.Error("%s(\"%s\", \"%v\", &ret) error(%v)", myrpc.MessageServiceSavePrivate, key, args, err)
+			log.Error("messageServiceProxy.SavePrivateMessage(%s, %v, %v, %v) error(%v)", key, m.Msg, m.MsgId, expire, err)
 			return err
 		}
 	}
 	// push message
-	for e := c.conn.Front(); e != nil; e = e.Next() {
-		conn, _ := e.Value.(*Connection)
+	for e := c.connections.Front(); e != nil; e = e.Next() {
+		conn := e.Conn
 		// if version empty then use old protocol
 		if conn.Version == "" {
 			if oldMsg == nil {
@@ -116,9 +108,9 @@ func (c *Channel) PushMsg(key string, m *Message, expire uint) error {
 }
 
 // AddConn implements the Channel AddConn method.
-func (c *Channel) AddConn(key string, conn *Connection) (*hlist.Element, error) {
+func (c *Channel) AddConn(key string, conn *Connection) (*hlist.Node, error) {
 	c.mutex.Lock()
-	if c.conn.Len()+1 > Conf.MaxSubscriberPerChannel {
+	if c.connections.Len()+1 > Conf.MaxSubscriberPerChannel {
 		c.mutex.Unlock()
 		log.Error("user_key:\"%s\" exceed conn", key)
 		return nil, ErrMaxConn
@@ -130,42 +122,36 @@ func (c *Channel) AddConn(key string, conn *Connection) (*hlist.Element, error) 
 		return nil, err
 	}
 	// add conn
-	conn.Buf = make(chan []byte, Conf.MsgBufNum)
+	conn.Msgs = make(chan []byte, Conf.MsgBufNum)
 	conn.HandleWrite(key)
-	e := c.conn.PushFront(conn)
+	node := c.connections.PushFront(conn)
 	c.mutex.Unlock()
 	ConnStat.IncrAdd()
-	log.Info("user_key:\"%s\" add conn = %d", key, c.conn.Len())
-	return e, nil
+	log.Info("user_key:\"%s\" add conn = %d", key, c.connections.Len())
+	return node, nil
 }
 
 // RemoveConn implements the Channel RemoveConn method.
-func (c *Channel) RemoveConn(key string, e *hlist.Element) error {
+func (c *Channel) RemoveConn(key string, node *hlist.Node) error {
 	c.mutex.Lock()
-	tmp := c.conn.Remove(e)
+	tmp := c.connections.Remove(node)
 	c.mutex.Unlock()
 	conn, ok := tmp.(*Connection)
 	if !ok {
 		return ErrAssectionConn
 	}
-	close(conn.Buf)
+	close(conn.Msgs)
 	ConnStat.IncrRemove()
-	log.Info("user_key:\"%s\" remove conn = %d", key, c.conn.Len())
+	log.Info("user_key:\"%s\" remove conn = %d", key, c.connections.Len())
 	return nil
 }
 
 // Close implements the Channel Close method.
 func (c *Channel) Close() error {
 	c.mutex.Lock()
-	for e := c.conn.Front(); e != nil; e = e.Next() {
-		if conn, ok := e.Value.(*Connection); !ok {
-			c.mutex.Unlock()
-			return ErrAssectionConn
-		} else {
-			if err := conn.Conn.Close(); err != nil {
-				// ignore close error
-				log.Warn("conn.Close() error(%v)", err)
-			}
+	for node := c.connections.Front(); node != nil; node = node.Next() {
+		if err := node.Conn.Close(); err != nil {
+			log.Warn("conn.Close() error(%v)", err) // ignore close error
 		}
 	}
 	c.mutex.Unlock()

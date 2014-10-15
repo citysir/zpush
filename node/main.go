@@ -9,6 +9,7 @@ import (
 
 func main() {
 	flag.Parse()
+
 	InitConfig()
 
 	runtime.GOMAXPROCS(Conf.MaxCore)

@@ -11,6 +11,15 @@ type Message struct {
 	Msg   string `json:"msg"` // message content
 }
 
+func (m *Message) Bytes() ([]byte, error) {
+	byteJson, err := json.Marshal(m)
+	if err != nil {
+		log.Error("json.Marshal(%v) error(%v)", m, err)
+		return nil, err
+	}
+	return byteJson, nil
+}
+
 const (
 	MinCmdNum = 1
 	MaxCmdNum = 5

@@ -123,9 +123,9 @@ func statListen(bind string) {
 }
 
 // start stats, called at process start
-func BindStatAddr(statAddr string) {
+func BindStatAddr(addr string) {
 	startTime = time.Now().UnixNano()
-	go statListen(statAddr)
+	go statListen(addr)
 }
 
 // memory stats

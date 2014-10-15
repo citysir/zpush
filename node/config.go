@@ -29,6 +29,8 @@ type Config struct {
 	KetamaBase    int    `json:"KetamaBase"`
 	ChannelBucket int    `json:"ChannelBucket"`
 
+	MsgBufNum int `json:"MsgBufNum"`
+
 	WriteBufferSize     int  `json:"WriteBufferSize"`
 	ReadeBufferSize     int  `json:"ReadBufferSize"`
 	BufioInstance       int  `json:"BufioInstance"`
@@ -40,7 +42,7 @@ type Config struct {
 	ZookeeperLocation        string `json:"ZookeeperLocation"`
 	ZookeeperName            string `json:"ZookeeperName"`
 	ZookeeperWeight          int    `json:"ZookeeperWeight"`
-	ZookeeperOfflineLocation string `json:"ZookeeperOfflineLocation"`
+	ZookeeperMessageLocation string `json:"ZookeeperMessageLocation"`
 }
 
 func InitConfig() {
